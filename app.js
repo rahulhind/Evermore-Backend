@@ -48,19 +48,35 @@ cloudinary.config({
 //   filename: function (req, file, cb) {
 //     cb(null, file.originalname);
 //   },
-//});
+// });
 // const upload = multer({ storage });
-
-//Cloudinary Cloud Storage
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: {
     folder: "asset", // Specify the folder in Cloudinary
-    format: async (req, file) => "auto", // You can customize the format
-    public_id: (req, file) => "post_image", // You can customize the public_id
+    // format: async (req, file) => "jpeg", // You can customize the format
+    format: async (req, file) => {
+      // Extract the file extension and convert to lowercase
+      const extension = file.originalname.split('.').pop().toLowerCase();
+      
+      // Check if the extension is one of the allowed formats
+      const allowedFormats = ['jpeg', 'jpg', 'png'];
+      if (allowedFormats.includes(extension)) {
+        return extension;
+      } else {
+        // If not an allowed format, default to 'jpeg' or handle it as needed
+        return 'jpeg';
+      }
+    },
+    public_id: async (req, file) => {
+      const uniqueId = file.fieldname + '-' + Date.now(); // Generate a unique identifier
+      return `post_image_${uniqueId}`;
+    },
   },
 });
 const upload = multer({ storage: storage });
+
+
 
 /* ROUTES WITH FILES */
 app.post("/auth/register", upload.single("picture"), register);

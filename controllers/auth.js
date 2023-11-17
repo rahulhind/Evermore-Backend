@@ -5,6 +5,7 @@ import User from "../models/User.js";
 /* REGISTER USER */
 export const register = async (req, res) => {
   try {
+    //console.log("Coming Signup");
     const {
       firstName,
       lastName,
@@ -24,7 +25,7 @@ export const register = async (req, res) => {
       lastName,
       email,
       password: passwordHash,
-      picturePath,
+      picturePath:req.file.filename,
       friends,
       location,
       occupation,
