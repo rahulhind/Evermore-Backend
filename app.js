@@ -81,8 +81,8 @@ const upload = multer({ storage: storage });
 /* ROUTES WITH FILES */
 app.post("/auth/register", upload.single("picture"), register);
 app.post("/posts", verifyToken, upload.single("picture"), createPost);
+//app.post("/posts",verifyToken, createPost);
 
-/* ROUTES */
 app.get("/test", (req, res) => {
   res.json({
     message: "Server Running",
