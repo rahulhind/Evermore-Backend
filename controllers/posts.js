@@ -58,7 +58,6 @@ export const getUserPosts = async (req, res) => {
     res.status(404).json({ message: err.message });
   }
 };
-
 /* UPDATE */
 export const commentPost = async (req, res) => {
   const { id } = req.params;
