@@ -1,6 +1,10 @@
 import Post from "../models/Post.js";
 import User from "../models/User.js";
-import { v2 as cloudinary } from "cloudinary";
+
+
+import { createNotification } from "./notifications.js";
+
+
 
 /* CREATE POST */
 export const createPost = async (req, res) => {
@@ -66,6 +70,16 @@ export const likePost = async (req, res) => {
       post.likes.delete(userId);
     } else {
       post.likes.set(userId, true);
+      // Like post
+      await createNotification("like", {
+        sender: userId,
+        recipient: post.userId,
+        metadata: {
+          postId: id,
+          postType: "post",
+        },
+      });
+
     }
 
     const updatedPost = await Post.findByIdAndUpdate(
@@ -86,19 +100,32 @@ export const addComment = async (req, res) => {
     const { id } = req.params;
     const { userId, content } = req.body;
 
+    console.log("=".repeat(60));
+    console.log("💬 ADD COMMENT CALLED");
+    console.log("  Post ID:", id);
+    console.log("  User ID:", userId);
+    console.log("  Content:", content?.substring(0, 30));
+
     if (!content || !content.trim()) {
       return res.status(400).json({ message: "Comment content is required" });
     }
 
     const post = await Post.findById(id);
     if (!post) {
+      console.log("❌ Post not found");
       return res.status(404).json({ message: "Post not found" });
     }
 
+    console.log("✅ Post found");
+    console.log("  Post owner ID:", post.userId);
+
     const user = await User.findById(userId);
     if (!user) {
+      console.log("❌ User not found");
       return res.status(404).json({ message: "User not found" });
     }
+
+    console.log("✅ User found:", user.firstName, user.lastName);
 
     const newComment = {
       userId: user._id,
@@ -106,20 +133,65 @@ export const addComment = async (req, res) => {
       lastName: user.lastName,
       userPicturePath: user.picturePath,
       content: content.trim(),
-      likes: {},
+      likes: new Map(),
       replies: [],
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
     post.comments.push(newComment);
+    
+    // ✅ SAVE FIRST to get the comment ID
     await post.save();
 
+    // ✅ NOW get the comment ID (it's the last comment)
+    const savedComment = post.comments[post.comments.length - 1];
+    console.log("✅ Comment saved to database");
+    console.log("  Comment ID:", savedComment._id); // Now it has an ID!
+
+    // ✅ CREATE NOTIFICATION (after saving)
+    try {
+      console.log("📬 Creating comment notification...");
+      console.log("  Sender (commenter):", userId);
+      console.log("  Recipient (post owner):", post.userId);
+
+      // Check if it's not a self-comment
+      if (post.userId && post.userId.toString() !== userId.toString()) {
+        console.log("✅ Proceeding to create notification...");
+        
+        const notification = await createNotification("comment", {
+          sender: userId,
+          recipient: post.userId.toString(), // Already a string, but ensure it
+          metadata: {
+            postId: id,
+            commentId: savedComment._id.toString(), // ✅ Now it exists!
+            commentPreview: content.trim().substring(0, 50),
+          },
+        });
+
+        if (notification) {
+          console.log("✅ Comment notification created:", notification._id);
+        } else {
+          console.log("⚠️ Notification returned null");
+        }
+      } else {
+        console.log("⚠️ Skipping notification (self-comment)");
+      }
+    } catch (notifError) {
+      console.error("❌ Notification creation failed:");
+      console.error("  Error:", notifError.message);
+      console.error("  Stack:", notifError.stack);
+    }
+
+    console.log("=".repeat(60));
     res.status(200).json(post);
   } catch (err) {
+    console.error("❌ Error in addComment:", err);
+    console.error("Stack:", err.stack);
     res.status(500).json({ message: err.message });
   }
 };
+
 
 /* EDIT COMMENT */
 export const editComment = async (req, res) => {
@@ -371,10 +443,8 @@ export const replyToComment = async (req, res) => {
 
     console.log("=".repeat(60));
     console.log("💬 REPLY TO COMMENT");
-    console.log("Post ID:", id);
-    console.log("Parent Comment ID:", commentId);
-    console.log("User ID:", userId);
-    console.log("Content:", content);
+    console.log("  Post ID:", id);
+    console.log("  Parent Comment ID:", commentId);
 
     if (!content || !content.trim()) {
       return res.status(400).json({ message: "Reply content is required" });
@@ -386,21 +456,17 @@ export const replyToComment = async (req, res) => {
       return res.status(404).json({ message: "Post not found" });
     }
 
-    console.log("✅ Post found");
     const user = await User.findById(userId);
     if (!user) {
       console.log("❌ User not found");
       return res.status(404).json({ message: "User not found" });
     }
 
-    console.log("✅ User found");
-
-    // Find the parent comment (check both top-level and nested replies)
+    // Find the parent comment
     let parentComment = post.comments.id(commentId);
 
     if (!parentComment) {
-      console.log("Not found in top-level, searching in replies...");
-      // Search in replies
+      console.log("Searching in replies...");
       for (const topComment of post.comments) {
         if (topComment.replies && Array.isArray(topComment.replies)) {
           const reply = topComment.replies.find(
@@ -408,27 +474,14 @@ export const replyToComment = async (req, res) => {
           );
           if (reply) {
             parentComment = reply;
-            console.log("✅ Found parent in nested replies");
             break;
           }
         }
       }
-    } else {
-      console.log("✅ Found parent in top-level comments");
     }
 
     if (!parentComment) {
-      console.log("❌ Parent comment not found with ID:", commentId);
-      console.log("Available comment IDs:");
-      post.comments.forEach((c, i) => {
-        console.log(`  [${i}] ${c._id.toString()}`);
-        if (c.replies && c.replies.length > 0) {
-          c.replies.forEach((r, j) => {
-            console.log(`    Reply [${j}] ${r._id.toString()}`);
-          });
-        }
-      });
-      console.log("=".repeat(60));
+      console.log("❌ Parent comment not found");
       return res.status(404).json({ message: "Parent comment not found" });
     }
 
@@ -444,25 +497,52 @@ export const replyToComment = async (req, res) => {
       updatedAt: new Date(),
     };
 
-    console.log("📝 Creating new reply");
-    
-    // Initialize replies array if it doesn't exist
     if (!parentComment.replies) {
       parentComment.replies = [];
     }
 
     parentComment.replies.push(newReply);
     
-    console.log("💾 Saving post...");
+    // ✅ SAVE FIRST to get the reply ID
     await post.save();
 
-    console.log("✅ Reply added successfully");
+    // ✅ NOW get the reply ID (it's the last reply)
+    const savedReply = parentComment.replies[parentComment.replies.length - 1];
+    console.log("✅ Reply saved, ID:", savedReply._id);
+
+    // ✅ CREATE NOTIFICATION (after saving)
+    try {
+      console.log("📬 Creating reply notification...");
+
+      if (
+        parentComment.userId &&
+        parentComment.userId.toString() !== userId.toString()
+      ) {
+        const notification = await createNotification("reply", {
+          sender: userId,
+          recipient: parentComment.userId.toString(),
+          metadata: {
+            postId: id,
+            commentId: commentId,
+            replyId: savedReply._id.toString(), // ✅ Now it exists!
+          },
+        });
+
+        if (notification) {
+          console.log("✅ Reply notification created");
+        }
+      } else {
+        console.log("⚠️ Skipping notification (self-reply)");
+      }
+    } catch (notifError) {
+      console.error("❌ Reply notification failed:", notifError.message);
+    }
+
     console.log("=".repeat(60));
     res.status(200).json(post);
   } catch (err) {
     console.error("❌ Error in replyToComment:", err);
-    console.error("Stack trace:", err.stack);
-    console.error("=".repeat(60));
+    console.error("Stack:", err.stack);
     res.status(500).json({ message: err.message });
   }
 };
