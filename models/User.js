@@ -33,6 +33,15 @@ const UserSchema = new mongoose.Schema(
       type: Array,
       default: [],
     },
+    isOnline: {
+      type: Boolean,
+      default: false,
+    },
+    lastActive: {
+      type: Date,
+      default: Date.now,
+    },
+    socketId: String, 
     location: String,
     occupation: String,
     viewedProfile: Number,

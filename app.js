@@ -15,6 +15,8 @@ import { register } from "./controllers/auth.js";
 import { createPost } from "./controllers/posts.js";
 import { verifyToken } from "./middleware/auth.js";
 import notificationRoutes from "./routes/notifications.js"; 
+import groupRoutes from "./routes/groups.js";
+import messageRoutes from "./routes/messages.js";
 
 import User from "./models/User.js";
 import Post from "./models/Post.js";
@@ -93,7 +95,9 @@ app.get("/test", (req, res) => {
 app.use("/auth", authRoutes);
 app.use("/users", userRoutes);
 app.use("/posts", postRoutes);
-app.use("/notifications", notificationRoutes); // ✅ ADD THIS LINE
+app.use("/notifications", notificationRoutes);
+app.use("/groups", groupRoutes);
+app.use("/messages", messageRoutes);
 
 
 /* MONGOOSE SETUP */
