@@ -6,6 +6,7 @@ import {
   updateOnlineStatus,
   getOnlineFriends, 
   getAllFriends, 
+  searchUsers
 } from "../controllers/users.js";
 import { verifyToken } from "../middleware/auth.js";
 
